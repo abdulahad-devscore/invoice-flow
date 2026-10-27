@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AP Review Queue</title>
+<meta http-equiv="refresh" content="20">
+<style>
+  :root { --bg:#f7f7f5; --card:#fff; --ink:#1d1d1b; --muted:#6b6b66; --line:#e3e2dc; --accent:#1f5f4a; --warn:#a3561b; --bad:#9b2c2c; --good:#1f6b3a; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#151614; --card:#1e1f1c; --ink:#ecebe6; --muted:#a3a29b; --line:#33342f; --accent:#6fc4a3; --warn:#e0a46a; --bad:#ef8a8a; --good:#7fd19b; } }
+  * { box-sizing:border-box; } body { margin:0; font:15px/1.5 system-ui,sans-serif; background:var(--bg); color:var(--ink); }
+  main { max-width:1080px; margin:0 auto; padding:20px 16px 60px; } h1 { font-size:20px; } h2 { font-size:16px; color:var(--muted); margin-top:32px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:14px; }
+  .muted { color:var(--muted); } a { color:var(--accent); } ul { margin:8px 0; padding-left:20px; } li { color:var(--warn); }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); } th { font-size:12px; color:var(--muted); text-transform:uppercase; }
+  .num { text-align:right; font-variant-numeric:tabular-nums; } .scroll { overflow-x:auto; }
+  .pill { font-size:12px; font-weight:600; padding:1px 8px; border:1px solid currentColor; border-radius:99px; }
+  .posted { color:var(--good); } .failed, .rejected { color:var(--bad); } .duplicate, .waiting_for_human { color:var(--warn); }
+  form { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+  input { font:inherit; padding:6px 9px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--ink); }
+  button { font:inherit; padding:6px 14px; border-radius:6px; border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; } button.danger { color:var(--bad); }
+</style>
+</head>
+<body><main>
+<h1>Waiting for AP review <span class="muted">({{ waiting|length }})</span></h1>
+{% for inv in waiting %}
+<div class="card">
+  <strong>{{ inv.supplier_name or 'Unknown supplier' }}</strong> · invoice {{ inv.supplier_invoice_number or '?' }}
+  · PO {{ inv.po_number or 'none quoted' }} · RM {{ '{:,.2f}'.format(inv.amount_total or 0) }}
+  · <a href="/api/invoices/{{ inv.id }}/pdf" target="_blank">open PDF</a>
+  <ul>{% for issue in (inv.match or {}).get('issues', []) %}<li>{{ issue }}</li>{% else %}<li>{{ inv.reason }}</li>{% endfor %}</ul>
+  <form method="post" action="/review/{{ inv.id }}">
+    <input name="reviewer" placeholder="Your name" required>
+    <input name="note" placeholder="Note (e.g. price increase agreed by buyer)" size="40">
+    {% if inv.po_number and (inv.match or {}).get('po_number') %}<button class="primary" name="decision" value="approve">Approve and post</button>{% endif %}
+    <button class="danger" name="decision" value="reject">Reject</button>
+  </form>
+</div>
+{% else %}<p class="muted">Nothing waiting. Matched invoices post straight to the ERP.</p>{% endfor %}
+
+<h2>Recent</h2>
+<div class="scroll"><table>
+<tr><th>Received</th><th>Status</th><th>Supplier</th><th>Invoice</th><th>PO</th><th class="num">Total (RM)</th><th>ERP bill</th><th>Note</th></tr>
+{% for inv in recent %}
+<tr><td class="muted">{{ inv.received_at.strftime('%d %b %H:%M') }}</td><td><span class="pill {{ inv.status }}">{{ inv.status.replace('_', ' ') }}</span></td>
+<td>{{ inv.supplier_name or '' }}</td><td>{{ inv.supplier_invoice_number or inv.filename }}</td><td>{{ inv.po_number or '' }}</td>
+<td class="num">{{ '{:,.2f}'.format(inv.amount_total) if inv.amount_total else '' }}</td><td>{{ inv.bill_ref or '' }}</td>
+<td class="muted">{{ inv.reviewer + ': ' if inv.reviewer else '' }}{{ inv.review_note or inv.reason or '' }}</td></tr>
+{% endfor %}
+</table></div>
+</main></body></html>

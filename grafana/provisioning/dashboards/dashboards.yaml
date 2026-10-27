@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: invoice-flow
+    folder: Invoice Flow
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

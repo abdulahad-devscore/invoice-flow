@@ -1,0 +1,116 @@
+# docker compose up  ->  the ERP bridge stack (Odoo + seed) plus Invoice Flow
+#   AP review queue:   http://localhost:8200/review
+#   Grafana dashboard: http://localhost:3000/d/invoice-flow   (anonymous viewer)
+#   Temporal UI:       http://localhost:8233
+#   RabbitMQ (DLQ):    http://localhost:15672   (guest / guest)
+#   Mail (GreenMail):  SMTP localhost:3025, IMAP localhost:3143
+#
+# Send the demo invoices once everything is up:
+#   docker compose --profile demo run --rm send-demo-invoices
+#
+# Expects erp-mcp-bridge cloned next to this repo (../erp-mcp-bridge).
+
+include:
+  - ../erp-mcp-bridge/compose.yaml
+
+x-flow: &flow
+  build: { context: ., args: { REGISTRY: "${REGISTRY:-docker.io}" } }
+  env_file: [{ path: .env, required: false }]
+  environment: &flow-env
+    DATABASE_URL: postgresql+psycopg://invoices:${INVOICE_DB_PASSWORD:-invoices}@invoice-db:5432/invoices
+    TEMPORAL_ADDRESS: temporal:7233
+    RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    IMAP_HOST: mail
+    BRIDGE_URL: http://erp-bridge:8000
+    EXTRACTOR: ${EXTRACTOR:-llm}
+    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  depends_on:
+    invoice-db: { condition: service_healthy }
+    temporal: { condition: service_healthy }
+    rabbitmq: { condition: service_healthy }
+    erp-bridge: { condition: service_healthy }
+  restart: unless-stopped
+
+services:
+  invoice-db:
+    image: ${REGISTRY:-docker.io}/library/postgres:16
+    environment:
+      POSTGRES_USER: invoices
+      POSTGRES_PASSWORD: ${INVOICE_DB_PASSWORD:-invoices}
+      POSTGRES_DB: invoices
+    ports: ["5435:5432"]
+    volumes: [invoice-db:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U invoices"]
+      interval: 5s
+      retries: 20
+
+  temporal:
+    image: ${REGISTRY:-docker.io}/temporalio/temporal:1.5.1
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--db-filename", "/data/temporal.db"]
+    ports: ["7233:7233", "8233:8233"]
+    volumes: [temporal-data:/data]
+    user: root
+    healthcheck:
+      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "localhost:7233"]
+      interval: 5s
+      retries: 30
+
+  rabbitmq:
+    image: ${REGISTRY:-docker.io}/library/rabbitmq:3.13-management
+    ports: ["5672:5672", "15672:15672"]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      retries: 20
+
+  mail:
+    image: ${REGISTRY:-docker.io}/greenmail/standalone:2.1.3
+    environment:
+      # auth disabled: mailboxes are created on first delivery, login = the email address
+      GREENMAIL_OPTS: -Dgreenmail.setup.test.all -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.auth.disabled
+    ports: ["3025:3025", "3143:3143"]
+
+  invoice-worker:
+    <<: *flow
+    command: ["invoice-flow", "worker"]
+
+  invoice-poller:
+    <<: *flow
+    command: ["invoice-flow", "poll"]
+    depends_on:
+      invoice-db: { condition: service_healthy }
+      temporal: { condition: service_healthy }
+      mail: { condition: service_started }
+
+  invoice-api:
+    <<: *flow
+    command: ["invoice-flow", "api", "--port", "8200"]
+    ports: ["8200:8200"]
+
+  grafana:
+    image: ${REGISTRY:-docker.io}/grafana/grafana:11.3.0
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/invoice-flow.json
+      INVOICE_DB_PASSWORD: ${INVOICE_DB_PASSWORD:-invoices}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["3000:3000"]
+    depends_on:
+      invoice-db: { condition: service_healthy }
+
+  send-demo-invoices:
+    <<: *flow
+    profiles: [demo]
+    restart: "no"
+    command: ["python", "scripts/generate_invoices.py", "--out", "/tmp/samples", "--send", "--smtp-host", "mail"]
+    depends_on:
+      mail: { condition: service_started }
+      erp-bridge: { condition: service_healthy }
+
+volumes:
+  invoice-db:
+  temporal-data:

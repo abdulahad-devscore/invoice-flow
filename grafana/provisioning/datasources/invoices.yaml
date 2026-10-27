@@ -1,0 +1,14 @@
+apiVersion: 1
+datasources:
+  - name: Invoices
+    uid: invoices-pg
+    type: grafana-postgresql-datasource
+    url: invoice-db:5432
+    user: invoices
+    secureJsonData:
+      password: ${INVOICE_DB_PASSWORD}
+    jsonData:
+      database: invoices
+      sslmode: disable
+      postgresVersion: 1600
+    isDefault: true
