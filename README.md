@@ -1,13 +1,13 @@
 # Invoice Flow
 
-[![ci](https://github.com/OWNER/invoice-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/invoice-flow/actions/workflows/ci.yml)
+[![ci](https://github.com/abdulahad-devscore/invoice-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/abdulahad-devscore/invoice-flow/actions/workflows/ci.yml)
 ![Temporal](https://img.shields.io/badge/Temporal-durable%20workflows-141414) ![license](https://img.shields.io/badge/license-MIT-green)
 
 **The problem.** Accounts payable at a manufacturer re-keys every supplier invoice from an email PDF into the ERP, after checking it against the purchase order and what the warehouse actually received. This repo automates that: it watches the AP mailbox, extracts each invoice into a strict schema, runs the 3-way match, posts matched invoices to the ERP, and sends everything else to a person with the reason already worked out.
 
 > Part of a three-repo showcase for **Tembusu Housewares**, a fictional Malaysian housewares manufacturer and retailer. Vendor bills are posted through [erp-mcp-bridge](../erp-mcp-bridge); see also [ops-copilot-agent](../ops-copilot-agent).
 
-![Run dashboard](docs/grafana-dashboard.png)
+![Demo: review queue, approval, run dashboard](docs/demo.gif)
 
 ## Architecture
 
@@ -71,6 +71,8 @@ Implements the receiving SOP from the company documents:
 
 ![AP review queue](docs/review-queue.png)
 
+![Run dashboard](docs/grafana-dashboard.png)
+
 ## Before vs after
 
 | | Manual (estimate) | Automated (measured on this stack) |
@@ -131,4 +133,4 @@ pytest -q
 
 ---
 
-Built by [Your Name], Backend Engineer at Devs Core — [devs-core.com](https://devs-core.com). MIT licence. All company, supplier and customer names are fictional.
+Built by Abdul Ahad, Backend Engineer at Devs Core — [devs-core.com](https://devs-core.com). MIT licence. All company, supplier and customer names are fictional.

@@ -117,6 +117,7 @@ def test_missing_po():
     r = three_way_match(invoice([("PP resin", "RM-PP-RESIN", 800, 6.20)], po="P09999"), None)
     assert not r.matched
     assert "P09999 not found" in r.issues[-1]
+    assert r.po_number is None  # the review page hides "approve" when there is nothing to bill against
 
 
 def test_wrong_supplier():

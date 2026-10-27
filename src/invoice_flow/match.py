@@ -44,7 +44,7 @@ def three_way_match(invoice: SupplierInvoice, po: dict | None) -> MatchResult:
     if po is None:
         return MatchResult(
             matched=False,
-            po_number=invoice.po_number,
+            po_number=None,  # the PO this invoice was matched to: none
             issues=issues + [f"purchase order {invoice.po_number or '(none quoted)'} not found"],
             lines=[],
         )
