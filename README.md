@@ -115,7 +115,7 @@ pip install -e ".[dev]"
 pytest -q
 ```
 
-28 tests: the 3-way match rules; extraction from real PDFs in all three supplier layouts; the cheap → strong model fallback; and the workflow end to end on a real Temporal server — straight-through posting, human approve/reject, duplicates (including two copies arriving at the same instant), a dropped response after the ERP write (retried without a second bill), bridge refusal → dead-letter, replay, and the 72-hour review timeout (CI uses Temporal's time-skipping server, so that one runs in seconds).
+29 tests: the 3-way match rules; extraction from real PDFs in all three supplier layouts; the cheap → strong model fallback; and the workflow end to end on a real Temporal server — straight-through posting, human approve/reject, duplicates (including two copies arriving at the same instant), a dropped response after the ERP write (retried without a second bill), bridge refusal → dead-letter, replay, and the review timeout dead-lettering an invoice (the window is configurable, so the test uses 2 seconds instead of 72 hours).
 
 ## Design notes
 

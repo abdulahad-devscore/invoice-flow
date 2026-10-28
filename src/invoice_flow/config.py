@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     bridge_client_id: str = "invoice-flow"
     bridge_client_secret: str = "invoice-flow-demo-secret"
 
-    human_review_timeout_hours: int = 72
+    human_review_timeout_hours: float = 72
     public_url: str = "http://localhost:8200"
 
 

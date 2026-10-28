@@ -218,12 +218,12 @@ async def test_unknown_po_cannot_be_approved_into_the_erp(stack):
 
 
 async def test_review_timeout_dead_letters(stack):
-    if not stack["time_skipping"]:
-        pytest.skip("needs the time-skipping test server to fast-forward 72 hours")
+    stack["settings"].human_review_timeout_hours = 2 / 3600  # a 2-second review window instead of 72 hours
     invoice_id, handle = await run(stack, make_pdf(stack["dir"], "KVP-INV-0009", "price_up_5pct"))
-    outcome = await handle.result()  # time skips past the 72 h review window
+    outcome = await handle.result()
     assert outcome.status == "failed"
-    assert stack["acts"].dead_letters[-1][1] == "human_review"
+    assert outcome.reason == "human review timed out"
+    assert stack["acts"].dead_letters[-1][:2] == (invoice_id, "human_review")
 
 
 async def test_two_copies_at_once_keep_exactly_one(stack):

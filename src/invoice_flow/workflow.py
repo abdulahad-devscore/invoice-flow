@@ -102,7 +102,7 @@ class InvoiceWorkflow:
                     )
                 except TimeoutError:
                     await self._act(
-                        acts.send_to_dlq, iid, step, f"no review decision within {inp.review_timeout_hours} hours"
+                        acts.send_to_dlq, iid, step, f"no review decision within {inp.review_timeout_hours:g} hours"
                     )
                     return await finish(Status.FAILED, "human review timed out")
                 waited = workflow.now() - wait_started

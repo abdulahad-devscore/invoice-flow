@@ -12,8 +12,7 @@ jobs:
         with: { python-version: "3.12" }
       - run: pip install -e ".[dev]"
       - run: ruff check src tests scripts && ruff format --check src tests scripts
-      # Workflow tests use Temporal's time-skipping test server (downloaded by the SDK),
-      # so the 72-hour review timeout is tested in seconds.
+      # Workflow tests need a Temporal server: the SDK downloads its test server in CI.
       - name: pytest
         shell: bash
         run: |

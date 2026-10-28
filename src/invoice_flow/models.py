@@ -94,7 +94,7 @@ class Decision(BaseModel):
 
 class WorkflowInput(BaseModel):
     invoice_id: str
-    review_timeout_hours: int = 72
+    review_timeout_hours: float = 72
 
 
 class WorkflowOutcome(BaseModel):
