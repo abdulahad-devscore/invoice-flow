@@ -7,7 +7,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, Float, Integer, LargeBinary, String, Text, select
+from sqlalchemy import JSON, DateTime, Float, Integer, LargeBinary, String, Text, update
 from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -53,6 +53,16 @@ class Invoice(Base):
     processing_seconds: Mapped[float | None] = mapped_column(Float)  # machine time, excludes waiting for people
 
 
+class InvoiceClaim(Base):
+    """Which record owns a supplier's invoice number. The primary key is the duplicate check."""
+
+    __tablename__ = "invoice_claims"
+
+    supplier_key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    invoice_number: Mapped[str] = mapped_column(String(100), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String(36))
+
+
 class Database:
     def __init__(self, url: str):
         self.engine = create_async_engine(url, pool_pre_ping=True)
@@ -85,23 +95,41 @@ class Database:
                 setattr(inv, k, v)
             await s.commit()
 
-    async def find_duplicate(self, invoice_id: str, supplier: str, number: str) -> Invoice | None:
-        """The earlier record of the same supplier invoice, if any.
+    async def claim(self, invoice_id: str, supplier: str, number: str) -> str | None:
+        """Atomically claim (supplier, invoice number) for this record.
 
-        Two copies processed at the same moment both see each other, so only a copy that
-        arrived *first* (received_at, then id as tie-break) counts: exactly one survives.
+        Returns None if this record now owns the number, or the id of the record that already
+        does. The primary key makes the claim atomic, so two copies of one invoice processed at
+        the same moment cannot both win. A claim held by a rejected or failed record is handed
+        over, so a corrected re-send can go through.
         """
-        async with self.session() as s:
-            me = await s.get(Invoice, invoice_id)
-            rows = (
-                await s.scalars(
-                    select(Invoice).where(
-                        Invoice.supplier_invoice_number == number,
-                        Invoice.id != invoice_id,
-                        Invoice.status.notin_(["rejected", "failed", "duplicate"]),
+        key = supplier.split()[0].lower()
+        for _ in range(3):
+            async with self.session() as s:
+                s.add(InvoiceClaim(supplier_key=key, invoice_number=number, owner_id=invoice_id))
+                try:
+                    await s.commit()
+                    return None
+                except IntegrityError:
+                    await s.rollback()
+                claim = await s.get(InvoiceClaim, (key, number))
+                if claim is None:
+                    continue  # released between our insert and read: try again
+                if claim.owner_id == invoice_id:
+                    return None  # activity retry after we already claimed it
+                owner = await s.get(Invoice, claim.owner_id)
+                if owner is not None and owner.status not in ("rejected", "failed"):
+                    return claim.owner_id
+                taken = await s.execute(
+                    update(InvoiceClaim)
+                    .where(
+                        InvoiceClaim.supplier_key == key,
+                        InvoiceClaim.invoice_number == number,
+                        InvoiceClaim.owner_id == claim.owner_id,
                     )
+                    .values(owner_id=invoice_id)
                 )
-            ).all()
-        rows = [r for r in rows if (r.received_at, r.id) < (me.received_at, me.id)]
-        first_word = supplier.split()[0].lower()
-        return next((r for r in rows if r.supplier_name and r.supplier_name.split()[0].lower() == first_word), None)
+                await s.commit()
+                if taken.rowcount == 1:
+                    return None
+        raise RuntimeError(f"could not settle the claim on {supplier} {number}")

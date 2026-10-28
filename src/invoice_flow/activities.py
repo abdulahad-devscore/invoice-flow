@@ -66,8 +66,7 @@ class InvoiceActivities:
 
     @activity.defn
     async def check_duplicate(self, invoice_id: str, supplier: str, number: str) -> str | None:
-        dup = await self.db.find_duplicate(invoice_id, supplier, number)
-        return dup.id if dup else None
+        return await self.db.claim(invoice_id, supplier, number)
 
     @activity.defn
     async def fetch_po(self, po_number: str) -> dict | None:
